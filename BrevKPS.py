@@ -143,8 +143,6 @@ class KPSScaleNode:
         try:
             logger.info("Starting KPS processing")
             logger.info(f"Scale factor: {scale_factor}")
-            logger.info("Input image type:", type(image))
-            
             if isinstance(image, torch.Tensor):
                 logger.info("IMAGE IS TENSOR")
                 image_np = image.squeeze(0).permute(0,1,2).cpu().numpy()
