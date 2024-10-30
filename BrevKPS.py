@@ -8,7 +8,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class KPSScalePositionNode:
+class KPSScaleNode:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -20,22 +20,7 @@ class KPSScalePositionNode:
                     "max": 10.0,
                     "step": 0.1
                 }),
-                "change_position": ("BOOLEAN", {"default": False}),
             },
-            "optional": {
-                "position_x": ("FLOAT", {
-                    "default": 0.5,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.01
-                }),
-                "position_y": ("FLOAT", {
-                    "default": 0.5,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.01
-                }),
-            }
         }
 
     RETURN_TYPES = ("IMAGE",)
@@ -65,7 +50,6 @@ class KPSScalePositionNode:
             mask = cv2.inRange(img, np.array(target_color), np.array(target_color))
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
-            # Log number of contours found for this color
             logger.info(f"Found {len(contours)} contours for color {target_color}")
             
             if contours:
@@ -78,7 +62,6 @@ class KPSScalePositionNode:
                     logger.info(f"Added keypoint {i} at ({cX:.3f}, {cY:.3f})")
             else:
                 logger.warning(f"No contours found for color {target_color}")
-                # Add a default position in the center
                 centers.append((0.5, 0.5))
                 logger.info(f"Added default keypoint {i} at (0.5, 0.5)")
 
@@ -86,25 +69,27 @@ class KPSScalePositionNode:
         logger.info(f"Final keypoints: {keypoints_formatted}")
         return keypoints_formatted
 
-    def scale_and_position_keypoints(self, normalized_keypoints, scale_factor, new_position=None):
+    def scale_keypoints(self, normalized_keypoints, scale_factor):
         logger.info(f"Scaling keypoints with factor {scale_factor}")
         logger.info(f"Input keypoints: {normalized_keypoints}")
-        logger.info(f"New position: {new_position}")
         
+        # If scale is 1, return original keypoints
+        if scale_factor == 1.0:
+            logger.info("Scale factor is 1.0 - returning original keypoints")
+            return normalized_keypoints
+            
         nose_kp = next(kp for kp in normalized_keypoints['keypoints'] if kp['feature'] == 'Keypoint 3')
         logger.info(f"Nose keypoint: {nose_kp}")
         
         scaled_kps = []
         for kp in normalized_keypoints['keypoints']:
+            # Calculate distance from nose point
             dx = (kp['x'] - nose_kp['x']) * scale_factor
             dy = (kp['y'] - nose_kp['y']) * scale_factor
             
-            if new_position is not None:
-                x = new_position['x'] + dx
-                y = new_position['y'] + dy
-            else:
-                x = nose_kp['x'] + dx
-                y = nose_kp['y'] + dy
+            # Scale around the nose point
+            x = nose_kp['x'] + dx
+            y = nose_kp['y'] + dy
                 
             scaled_kp = {
                 'x': x,
@@ -169,12 +154,10 @@ class KPSScalePositionNode:
         logger.info("Finished drawing keypoints")
         return out_img
 
-    def process_kps(self, image, scale_factor, change_position, position_x=None, position_y=None):
+    def process_kps(self, image, scale_factor):
         try:
             logger.info("Starting KPS processing")
             logger.info(f"Scale factor: {scale_factor}")
-            logger.info(f"Change position: {change_position}")
-            logger.info(f"Position: ({position_x}, {position_y})")
 
             if isinstance(image, torch.Tensor):
                 image_np = image.squeeze(0).permute(0,1,2).cpu().numpy()
@@ -189,12 +172,13 @@ class KPSScalePositionNode:
             h, w = image_rgb.shape[:2]
             logger.info(f"Image dimensions: {w}x{h}")
             
-            # Extract keypoints and ensure we have exactly 5
+            # Extract keypoints
             keypoints = self.get_coords(image_rgb)
-
-            new_position = {'x': position_x, 'y': position_y} if change_position else None
-            scaled_keypoints = self.scale_and_position_keypoints(keypoints, scale_factor, new_position)
             
+            # Scale keypoints
+            scaled_keypoints = self.scale_keypoints(keypoints, scale_factor)
+            
+            # Draw the new keypoint image
             output_img = self.draw_keypoints_new((w, h), scaled_keypoints)
             
             output_array = np.array(output_img).astype(np.float32) / 255.0
@@ -211,9 +195,9 @@ class KPSScalePositionNode:
 
 # Update the node mappings
 NODE_CLASS_MAPPINGS = {
-    "KPSScalePositionNode": KPSScalePositionNode
+    "KPSScaleNode": KPSScaleNode
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "KPSScalePositionNode": "KPS Scale and Position"
+    "KPSScaleNode": "KPS Scale"
 }
