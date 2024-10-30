@@ -16,6 +16,9 @@ class KPSScalePositionNode:
                     "max": 10.0,
                     "step": 0.1
                 }),
+                "change_position": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
                 "position_x": ("FLOAT", {
                     "default": 0.5,
                     "min": 0.0,
@@ -28,7 +31,7 @@ class KPSScalePositionNode:
                     "max": 1.0,
                     "step": 0.01
                 }),
-            },
+            }
         }
 
     RETURN_TYPES = ("IMAGE",)
@@ -59,17 +62,29 @@ class KPSScalePositionNode:
         keypoints_formatted = {'keypoints': [{'x': x, 'y': y, 'feature': f"Keypoint {i}"} for i, (x, y) in enumerate(centers, start=1)]}
         return keypoints_formatted
 
-    def scale_and_position_keypoints(self, normalized_keypoints, scale_factor, new_position):
+    def scale_and_position_keypoints(self, normalized_keypoints, scale_factor, new_position=None):
         print("Scale and Position: ", normalized_keypoints)
-        print(scale_factor, new_position)
+        print("Scale factor:", scale_factor)
+        print("New position:", new_position)
+        
         nose_kp = next(kp for kp in normalized_keypoints['keypoints'] if kp['feature'] == 'Keypoint 3')
         scaled_kps = []
+        
         for kp in normalized_keypoints['keypoints']:
             dx = (kp['x'] - nose_kp['x']) * scale_factor
             dy = (kp['y'] - nose_kp['y']) * scale_factor
+            
+            if new_position is not None:
+                x = new_position['x'] + dx
+                y = new_position['y'] + dy
+            else:
+                # Keep the nose point at its original position and scale around it
+                x = nose_kp['x'] + dx
+                y = nose_kp['y'] + dy
+                
             scaled_kp = {
-                'x': new_position['x'] + dx if new_position is not None else kp['x'] + dx,
-                'y': new_position['y'] + dy if new_position is not None else kp['y'] + dy,
+                'x': x,
+                'y': y,
                 'feature': kp['feature']
             }
             scaled_kps.append(scaled_kp)
@@ -113,7 +128,7 @@ class KPSScalePositionNode:
         
         return out_img
 
-    def process_kps(self, image, scale_factor, position_x, position_y):
+    def process_kps(self, image, scale_factor, change_position, position_x=None, position_y=None):
         try:
             if isinstance(image, torch.Tensor):
                 image_np = image.squeeze(0).permute(0,1,2).cpu().numpy()
@@ -131,8 +146,8 @@ class KPSScalePositionNode:
             # Extract keypoints from input image
             keypoints = self.get_coords(image_rgb)
             
-            # Scale and position the keypoints
-            new_position = {'x': position_x, 'y': position_y}
+            # Only use position if change_position is True
+            new_position = {'x': position_x, 'y': position_y} if change_position else None
             scaled_keypoints = self.scale_and_position_keypoints(keypoints, scale_factor, new_position)
             
             # Draw the new keypoint image
