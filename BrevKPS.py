@@ -1,4 +1,5 @@
 import numpy as np
+import tempfile
 import torch
 import cv2
 from PIL import Image
@@ -110,58 +111,45 @@ class KPSScaleNode:
         return out_img
 
     def get_coords(self, img):
-        logger.info("Starting keypoint extraction")
         centers = []
         colors = [
-            (0, 0, 255),  # Red
-            (0, 255, 0),  # Green
-            (255, 0, 0),  # Blue
-            (0, 255, 255),  # Yellow
-            (255, 0, 255),  # Magenta
+            (0, 0, 255),
+            (0, 255, 0),
+            (255, 0, 0),
+            (0, 255, 255),
+            (255, 0, 255),
         ]
-
-        # Save image temporarily
-        temp_path = "temp_kps_image.png"
-        cv2.imwrite(temp_path, img)
-        img = cv2.imread(temp_path)
-        import os
-        os.remove(temp_path)  # Clean up temp file
-        
+        if img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
         h, w = img.shape[:2]
-        logger.info(f"Image dimensions: {w}x{h}")
-
-        for i, target_color in enumerate(colors, 1):
-            logger.info(f"Searching for color {target_color} (Keypoint {i})")
+        for target_color in colors:
             mask = cv2.inRange(img, np.array(target_color), np.array(target_color))
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            logger.info(f"Found {len(contours)} contours for color {target_color}")
-            
-            if contours:
-                largest_contour = max(contours, key=cv2.contourArea)
-                M = cv2.moments(largest_contour)
+            for contour in contours:
+                M = cv2.moments(contour)
                 if M["m00"] != 0:
                     cX = int(M["m10"] / M["m00"]) / w
                     cY = int(M["m01"] / M["m00"]) / h
                     centers.append((cX, cY))
-                    logger.info(f"Added keypoint {i} at ({cX:.3f}, {cY:.3f})")
-            else:
-                logger.warning(f"No contours found for color {target_color}")
-                centers.append((0.5, 0.5))
-                logger.info(f"Added default keypoint {i} at (0.5, 0.5)")
-
         keypoints_formatted = {'keypoints': [{'x': x, 'y': y, 'feature': f"Keypoint {i}"} for i, (x, y) in enumerate(centers, start=1)]}
-        logger.info(f"Final keypoints: {keypoints_formatted}")
         return keypoints_formatted
+
+    def _decode_image_from_bytes(self, image_bytes):
+        """Decode image from bytes using OpenCV."""
+        image_np = np.frombuffer(image_bytes, np.uint8)
+        return cv2.imdecode(image_np, cv2.IMREAD_COLOR)
 
     def process_kps(self, image, scale_factor):
         try:
             logger.info("Starting KPS processing")
             logger.info(f"Scale factor: {scale_factor}")
-
+            logger.info("Input image type:", type(image))
+            
             if isinstance(image, torch.Tensor):
+                logger.info("IMAGE IS TENSOR")
                 image_np = image.squeeze(0).permute(0,1,2).cpu().numpy()
             else:
+                logger.info("IMAGE IS PIL")
                 image_np = np.array(image)
 
             if image_np.shape[2] != 3:
@@ -172,8 +160,18 @@ class KPSScaleNode:
             h, w = image_rgb.shape[:2]
             logger.info(f"Image dimensions: {w}x{h}")
             
-            # Extract keypoints using temporary file method
-            keypoints = self.get_coords(image_rgb)
+            # Convert numpy array to PIL Image for saving
+            pil_image = Image.fromarray(image_rgb)
+            
+            # Use temporary file to save and read the image
+            with tempfile.NamedTemporaryFile(suffix='.png') as temp_file:
+                logger.info(f"Saving temporary file to: {temp_file.name}")
+                pil_image.save(temp_file.name, format='PNG')
+                # Read the file in binary mode and decode
+                image_bytes = open(temp_file.name, 'rb').read()
+                decoded_image = self._decode_image_from_bytes(image_bytes)
+                # Now call get_coords with the decoded image
+                keypoints = self.get_coords(decoded_image)
             
             # Scale keypoints
             scaled_keypoints = self.scale_keypoints(keypoints, scale_factor)
@@ -186,12 +184,9 @@ class KPSScaleNode:
             
             logger.info("KPS processing completed successfully")
             return (output_tensor,)
-            
         except Exception as e:
             logger.error(f"Error in process_kps: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return (image,)
+            raise
 
 # Update the node mappings
 NODE_CLASS_MAPPINGS = {
