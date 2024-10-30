@@ -42,21 +42,6 @@ class KPSScalePositionNode:
     FUNCTION = "process_kps"
     CATEGORY = "BrevKPS"
 
-    def ensure_five_keypoints(self, keypoints):
-        logger.info(f"Validating keypoints: {keypoints}")
-        if len(keypoints['keypoints']) != 5:
-            logger.warning(f"Found {len(keypoints['keypoints'])} keypoints, expected 5")
-            # If we have fewer than 5 keypoints, add dummy keypoints at the center
-            while len(keypoints['keypoints']) < 5:
-                new_idx = len(keypoints['keypoints']) + 1
-                keypoints['keypoints'].append({
-                    'x': 0.5,
-                    'y': 0.5,
-                    'feature': f'Keypoint {new_idx}'
-                })
-                logger.info(f"Added dummy keypoint {new_idx}")
-        return keypoints
-
     def get_coords(self, img):
         logger.info("Starting keypoint extraction")
         centers = []
@@ -206,8 +191,7 @@ class KPSScalePositionNode:
             
             # Extract keypoints and ensure we have exactly 5
             keypoints = self.get_coords(image_rgb)
-            keypoints = self.ensure_five_keypoints(keypoints)
-            
+
             new_position = {'x': position_x, 'y': position_y} if change_position else None
             scaled_keypoints = self.scale_and_position_keypoints(keypoints, scale_factor, new_position)
             
