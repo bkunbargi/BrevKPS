@@ -27,48 +27,6 @@ class KPSScaleNode:
     FUNCTION = "process_kps"
     CATEGORY = "BrevKPS"
 
-    def get_coords(self, img):
-        logger.info("Starting keypoint extraction")
-        centers = []
-        colors = [
-            (0, 0, 255),  # Red
-            (0, 255, 0),  # Green
-            (255, 0, 0),  # Blue
-            (0, 255, 255),  # Yellow
-            (255, 0, 255),  # Magenta
-        ]
-        
-        if img.shape[2] == 4:
-            logger.info("Converting BGRA to BGR")
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        
-        h, w = img.shape[:2]
-        logger.info(f"Image dimensions: {w}x{h}")
-
-        for i, target_color in enumerate(colors, 1):
-            logger.info(f"Searching for color {target_color} (Keypoint {i})")
-            mask = cv2.inRange(img, np.array(target_color), np.array(target_color))
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            logger.info(f"Found {len(contours)} contours for color {target_color}")
-            
-            if contours:
-                largest_contour = max(contours, key=cv2.contourArea)
-                M = cv2.moments(largest_contour)
-                if M["m00"] != 0:
-                    cX = int(M["m10"] / M["m00"]) / w
-                    cY = int(M["m01"] / M["m00"]) / h
-                    centers.append((cX, cY))
-                    logger.info(f"Added keypoint {i} at ({cX:.3f}, {cY:.3f})")
-            else:
-                logger.warning(f"No contours found for color {target_color}")
-                centers.append((0.5, 0.5))
-                logger.info(f"Added default keypoint {i} at (0.5, 0.5)")
-
-        keypoints_formatted = {'keypoints': [{'x': x, 'y': y, 'feature': f"Keypoint {i}"} for i, (x, y) in enumerate(centers, start=1)]}
-        logger.info(f"Final keypoints: {keypoints_formatted}")
-        return keypoints_formatted
-
     def scale_keypoints(self, normalized_keypoints, scale_factor):
             logger.info(f"Scaling keypoints with factor {scale_factor}")
             logger.info(f"Input keypoints: {normalized_keypoints}")
@@ -151,6 +109,51 @@ class KPSScaleNode:
         logger.info("Finished drawing keypoints")
         return out_img
 
+    def get_coords(self, img):
+        logger.info("Starting keypoint extraction")
+        centers = []
+        colors = [
+            (0, 0, 255),  # Red
+            (0, 255, 0),  # Green
+            (255, 0, 0),  # Blue
+            (0, 255, 255),  # Yellow
+            (255, 0, 255),  # Magenta
+        ]
+
+        # Save image temporarily
+        temp_path = "temp_kps_image.png"
+        cv2.imwrite(temp_path, img)
+        img = cv2.imread(temp_path)
+        import os
+        os.remove(temp_path)  # Clean up temp file
+        
+        h, w = img.shape[:2]
+        logger.info(f"Image dimensions: {w}x{h}")
+
+        for i, target_color in enumerate(colors, 1):
+            logger.info(f"Searching for color {target_color} (Keypoint {i})")
+            mask = cv2.inRange(img, np.array(target_color), np.array(target_color))
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            logger.info(f"Found {len(contours)} contours for color {target_color}")
+            
+            if contours:
+                largest_contour = max(contours, key=cv2.contourArea)
+                M = cv2.moments(largest_contour)
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"]) / w
+                    cY = int(M["m01"] / M["m00"]) / h
+                    centers.append((cX, cY))
+                    logger.info(f"Added keypoint {i} at ({cX:.3f}, {cY:.3f})")
+            else:
+                logger.warning(f"No contours found for color {target_color}")
+                centers.append((0.5, 0.5))
+                logger.info(f"Added default keypoint {i} at (0.5, 0.5)")
+
+        keypoints_formatted = {'keypoints': [{'x': x, 'y': y, 'feature': f"Keypoint {i}"} for i, (x, y) in enumerate(centers, start=1)]}
+        logger.info(f"Final keypoints: {keypoints_formatted}")
+        return keypoints_formatted
+
     def process_kps(self, image, scale_factor):
         try:
             logger.info("Starting KPS processing")
@@ -169,7 +172,7 @@ class KPSScaleNode:
             h, w = image_rgb.shape[:2]
             logger.info(f"Image dimensions: {w}x{h}")
             
-            # Extract keypoints
+            # Extract keypoints using temporary file method
             keypoints = self.get_coords(image_rgb)
             
             # Scale keypoints
