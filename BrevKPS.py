@@ -70,40 +70,37 @@ class KPSScaleNode:
         return keypoints_formatted
 
     def scale_keypoints(self, normalized_keypoints, scale_factor):
-        logger.info(f"Scaling keypoints with factor {scale_factor}")
-        logger.info(f"Input keypoints: {normalized_keypoints}")
-        
-        # If scale is 1, return original keypoints
-        if scale_factor == 1.0:
-            logger.info("Scale factor is 1.0 - returning original keypoints")
-            return normalized_keypoints
+            logger.info(f"Scaling keypoints with factor {scale_factor}")
+            logger.info(f"Input keypoints: {normalized_keypoints}")
             
-        nose_kp = next(kp for kp in normalized_keypoints['keypoints'] if kp['feature'] == 'Keypoint 3')
-        logger.info(f"Nose keypoint: {nose_kp}")
-        
-        scaled_kps = []
-        for kp in normalized_keypoints['keypoints']:
-            # Calculate distance from nose point
-            dx = (kp['x'] - nose_kp['x']) * scale_factor
-            dy = (kp['y'] - nose_kp['y']) * scale_factor
-            
-            # Scale around the nose point
-            x = nose_kp['x'] + dx
-            y = nose_kp['y'] + dy
+            # If scale is 1, return original keypoints
+            if scale_factor == 1.0:
+                logger.info("Scale factor is 1.0 - returning original keypoints")
+                return normalized_keypoints
                 
-            scaled_kp = {
-                'x': x,
-                'y': y,
-                'feature': kp['feature']
-            }
-            scaled_kps.append(scaled_kp)
-            logger.info(f"Scaled {kp['feature']}: original=({kp['x']:.3f}, {kp['y']:.3f}), scaled=({x:.3f}, {y:.3f})")
+            nose_kp = next(kp for kp in normalized_keypoints['keypoints'] if kp['feature'] == 'Keypoint 3')
+            logger.info(f"Nose keypoint: {nose_kp}")
+            
+            scaled_kps = []
+            for kp in normalized_keypoints['keypoints']:
+                # Calculate scaled delta from nose point
+                dx = (kp['x'] - nose_kp['x']) * scale_factor
+                dy = (kp['y'] - nose_kp['y']) * scale_factor
+                
+                # Add delta to original point position (not to nose position)
+                scaled_kp = {
+                    'x': kp['x'] + (dx - (kp['x'] - nose_kp['x'])),  # Add the difference in offset
+                    'y': kp['y'] + (dy - (kp['y'] - nose_kp['y'])),  # Add the difference in offset
+                    'feature': kp['feature']
+                }
+                scaled_kps.append(scaled_kp)
+                logger.info(f"Scaled {kp['feature']}: original=({kp['x']:.3f}, {kp['y']:.3f}), scaled=({scaled_kp['x']:.3f}, {scaled_kp['y']:.3f})")
 
-        scaled_keypoints = {
-            "keypoints": scaled_kps,
-        }
-        logger.info(f"Final scaled keypoints: {scaled_keypoints}")
-        return scaled_keypoints
+            scaled_keypoints = {
+                "keypoints": scaled_kps,
+            }
+            logger.info(f"Final scaled keypoints: {scaled_keypoints}")
+            return scaled_keypoints
 
     def draw_keypoints_new(self, dimensions, keypoints, color_list=[(255, 0, 0), (0, 255, 0), 
                                                             (0, 0, 255), (255, 255, 0), 
