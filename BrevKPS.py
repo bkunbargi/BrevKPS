@@ -45,15 +45,19 @@ class KPSScaleNode:
     def scale_keypoints(self, normalized_keypoints, scale_factor, position_x=None, position_y=None):
             logger.info(f"Scaling keypoints with factor {scale_factor}")
             logger.info(f"Input keypoints: {normalized_keypoints}")
-            
-            # If scale is 1, return original keypoints
-            if scale_factor == 1.0:
-                logger.info("Scale factor is 1.0 - returning original keypoints")
+            logger.info(f"Position: ({position_x}, {position_y})")
+
+            if scale_factor == 1.0 and position_x is None and position_y is None:
+                logger.info("No changes needed - returning original keypoints")
                 return normalized_keypoints
                 
             nose_kp = next(kp for kp in normalized_keypoints['keypoints'] if kp['feature'] == 'Keypoint 3')
             logger.info(f"Nose keypoint: {nose_kp}")
-            new_position = {'x': position_x, 'y': position_y} if position_x is not None and position_y is not None else None
+            
+            new_position = None
+            if position_x is not None and position_y is not None:
+                new_position = {"x": position_x, "y": position_y}
+
             scaled_kps = []
             for kp in normalized_keypoints['keypoints']:
                 dx = (kp['x'] - nose_kp['x']) * scale_factor
@@ -153,7 +157,7 @@ class KPSScaleNode:
         image_np = np.frombuffer(image_bytes, np.uint8)
         return cv2.imdecode(image_np, cv2.IMREAD_COLOR)
 
-    def process_kps(self, image, scale_factor):
+    def process_kps(self, image, scale_factor, position_x=None, position_y=None):
         try:
             logger.info("Starting KPS processing")
             logger.info(f"Scale factor: {scale_factor}")
@@ -186,7 +190,7 @@ class KPSScaleNode:
                 keypoints = self.get_coords(decoded_image)
             
             # Scale keypoints
-            scaled_keypoints = self.scale_keypoints(keypoints, scale_factor)
+            scaled_keypoints = self.scale_keypoints(keypoints, scale_factor, position_x, position_y)
             
             # Draw the new keypoint image
             output_img = self.draw_keypoints_new((w, h), scaled_keypoints)
