@@ -47,6 +47,9 @@ class KPSScaleNode:
             logger.info(f"Input keypoints: {normalized_keypoints}")
             logger.info(f"Position: ({position_x}, {position_y})")
 
+            # Treat 0 values as None for optional parameters
+            position_x = None if position_x == 0 else position_x
+            position_y = None if position_y == 0 else position_y
             if scale_factor == 1.0 and position_x is None and position_y is None:
                 logger.info("No changes needed - returning original keypoints")
                 return normalized_keypoints
