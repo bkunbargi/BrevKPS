@@ -27,13 +27,13 @@ class KPSScaleNode:
                     "default": None,
                     "min": 0.0,
                     "max": 1.0,
-                    "step": 0.001
+                    "step": 0.0001
                 }),
                 "position_y": ("FLOAT", {
                     "default": None,
                     "min": 0.0,
                     "max": 1.0,
-                    "step": 0.001
+                    "step": 0.0001
                 })
             }
         }
